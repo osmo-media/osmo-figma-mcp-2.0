@@ -45,7 +45,8 @@ export async function startHttpServer(host: string, port: number, mcpServer: Mcp
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id, Accept');
+    res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
     
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
