@@ -203,7 +203,7 @@ async function downloadFigmaImages(params: DownloadImagesParams) {
 export const downloadFigmaImagesTool = {
   name: "download_figma_images",
   description:
-    "Supplementary tool for selective image downloads. NOTE: get_figma_data already embeds S3 URLs automatically when downloadImages=true. Use this tool only when you need to: (1) re-download specific images at different scales, (2) download images selectively when get_figma_data was called with downloadImages=false, or (3) download additional images not in the original response.",
+    "Advanced tool for selective image downloads at custom scales/formats. RARELY NEEDED: get_figma_data already downloads and embeds all images automatically when downloadImages=true (the default). Only use this specialized tool when: (1) you need specific images at different scales/formats than the default 2x PNG, (2) you called get_figma_data with downloadImages=false and now need select images, or (3) you need to re-download images with different processing options (cropping, dimensions). For most use cases, get_figma_data handles all image needs automatically.",
   parameters,
   handler: downloadFigmaImages,
 } as const;

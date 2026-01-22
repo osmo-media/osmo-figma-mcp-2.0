@@ -170,7 +170,7 @@ async function getFigmaData(params: GetFigmaDataParams) {
 export const getFigmaDataTool = {
   name: "get_figma_data",
   description:
-    "Get comprehensive Figma file data including layout, content, visuals, and component information. Automatically downloads all images and embeds S3 URLs in the response.",
+    "Get comprehensive Figma design data with EXACT measurements, layout, colors, typography, and components. Automatically downloads all images/fills and embeds S3 URLs directly in the JSON. Returns precise pixel values, hex colors, font properties, spacing, and positioning. RECOMMENDED WORKFLOW: (1) Call get_figma_screenshot for visual reference, (2) Call this with downloadImages=true for measurements + embedded images, (3) Use screenshot as visual source of truth and this JSON for precise pixel values when generating code.",
   parameters,
   handler: getFigmaData,
 } as const;

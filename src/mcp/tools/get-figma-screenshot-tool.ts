@@ -111,7 +111,7 @@ async function getFigmaScreenshot(params: GetFigmaScreenshotParams) {
 export const getFigmaScreenshotTool = {
   name: "get_figma_screenshot",
   description:
-    "Take a screenshot of a Figma node and upload it to S3. Returns a permanent S3 URL showing the exact visual appearance of the design. Use this as the PRIMARY VISUAL REFERENCE when generating code - the screenshot is the source of truth for how the design should look.",
+    "Take a high-quality screenshot of any Figma node and upload it to S3. Returns a permanent S3 URL with exact dimensions showing the visual appearance of the design. CRITICAL: Use this as the PRIMARY VISUAL REFERENCE when generating code - the screenshot is the single source of truth for how the design should look. Always call this BEFORE get_figma_data for pixel-perfect code generation. The screenshot captures the true visual appearance; get_figma_data provides the precise measurements.",
   parameters,
   handler: getFigmaScreenshot,
 } as const;
