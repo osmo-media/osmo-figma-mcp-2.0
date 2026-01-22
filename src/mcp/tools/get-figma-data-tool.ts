@@ -32,19 +32,26 @@ const parameters = {
     .describe(
       "OPTIONAL. Do NOT use unless explicitly requested by the user. Controls how many levels deep to traverse the node tree.",
     ),
+  figmaAccessToken: z
+    .string()
+    .describe(
+      "User's Figma access token. Can be either a Personal Access Token (PAT) or an OAuth token (starts with 'figd_'). Required for authentication.",
+    ),
 };
 
 const parametersSchema = z.object(parameters);
 export type GetFigmaDataParams = z.infer<typeof parametersSchema>;
 
-// Simplified handler function
-async function getFigmaData(
-  params: GetFigmaDataParams,
-  figmaService: FigmaService,
-  outputFormat: "yaml" | "json",
-) {
+/**
+ * Handler for get_figma_data tool.
+ * Creates a FigmaService instance per-request using the provided access token.
+ */
+async function getFigmaData(params: GetFigmaDataParams, outputFormat: "yaml" | "json") {
   try {
-    const { fileKey, nodeId: rawNodeId, depth } = parametersSchema.parse(params);
+    const { fileKey, nodeId: rawNodeId, depth, figmaAccessToken } = parametersSchema.parse(params);
+
+    // Create FigmaService with per-request token
+    const figmaService = new FigmaService({ accessToken: figmaAccessToken });
 
     // Replace - with : in nodeId for our query—Figma API expects :
     const nodeId = rawNodeId?.replace(/-/g, ":");

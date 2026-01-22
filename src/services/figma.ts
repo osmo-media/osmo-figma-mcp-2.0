@@ -10,10 +10,14 @@ import { downloadAndProcessImage, type ImageProcessingResult } from "~/utils/ima
 import { Logger, writeLogs } from "~/utils/logger.js";
 import { fetchWithRetry } from "~/utils/fetch-with-retry.js";
 
+/**
+ * Authentication options for FigmaService.
+ * Accepts a single token that works for both Personal Access Tokens (PAT) and OAuth tokens.
+ * The service auto-detects the token type based on its format.
+ */
 export type FigmaAuthOptions = {
-  figmaApiKey: string;
-  figmaOAuthToken: string;
-  useOAuth: boolean;
+  /** Figma access token - can be either a Personal Access Token or OAuth token */
+  accessToken: string;
 };
 
 type SvgOptions = {
@@ -23,25 +27,24 @@ type SvgOptions = {
 };
 
 export class FigmaService {
-  private readonly apiKey: string;
-  private readonly oauthToken: string;
-  private readonly useOAuth: boolean;
+  private readonly accessToken: string;
+  private readonly isOAuthToken: boolean;
   private readonly baseUrl = "https://api.figma.com/v1";
 
-  constructor({ figmaApiKey, figmaOAuthToken, useOAuth }: FigmaAuthOptions) {
-    this.apiKey = figmaApiKey || "";
-    this.oauthToken = figmaOAuthToken || "";
-    this.useOAuth = !!useOAuth && !!this.oauthToken;
+  constructor({ accessToken }: FigmaAuthOptions) {
+    this.accessToken = accessToken;
+    // OAuth tokens start with "figd_" prefix, PATs are typically longer alphanumeric strings
+    // Both can be used with Bearer auth, but we log the type for debugging
+    this.isOAuthToken = accessToken.startsWith("figd_");
   }
 
   private getAuthHeaders(): Record<string, string> {
-    if (this.useOAuth) {
-      Logger.log("Using OAuth Bearer token for authentication");
-      return { Authorization: `Bearer ${this.oauthToken}` };
-    } else {
-      Logger.log("Using Personal Access Token for authentication");
-      return { "X-Figma-Token": this.apiKey };
-    }
+    // Figma API accepts both token types with Bearer auth
+    // OAuth tokens: Authorization: Bearer figd_xxx
+    // PATs: Can use either X-Figma-Token or Bearer auth
+    // Using Bearer for both is simpler and works universally
+    Logger.log(`Using ${this.isOAuthToken ? "OAuth" : "Personal Access"} token for authentication`);
+    return { Authorization: `Bearer ${this.accessToken}` };
   }
 
   /**

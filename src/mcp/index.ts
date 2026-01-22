@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { FigmaService, type FigmaAuthOptions } from "../services/figma.js";
 import { Logger } from "../utils/logger.js";
 import {
   downloadFigmaImagesTool,
@@ -19,13 +18,17 @@ type CreateServerOptions = {
   skipImageDownloads?: boolean;
 };
 
+/**
+ * Creates an MCP server instance.
+ * 
+ * Authentication is handled per-request via the `figmaAccessToken` parameter
+ * in each tool call. No server-level authentication is required.
+ */
 function createServer(
-  authOptions: FigmaAuthOptions,
   { isHTTP = false, outputFormat = "yaml", skipImageDownloads = false }: CreateServerOptions = {},
 ) {
   const server = new McpServer(serverInfo);
-  const figmaService = new FigmaService(authOptions);
-  registerTools(server, figmaService, { outputFormat, skipImageDownloads });
+  registerTools(server, { outputFormat, skipImageDownloads });
 
   Logger.isHTTP = isHTTP;
 
@@ -34,28 +37,28 @@ function createServer(
 
 function registerTools(
   server: McpServer,
-  figmaService: FigmaService,
   options: {
     outputFormat: "yaml" | "json";
     skipImageDownloads: boolean;
   },
 ): void {
   // Register get_figma_data tool
+  // Tool handles its own authentication via figmaAccessToken parameter
   server.tool(
     getFigmaDataTool.name,
     getFigmaDataTool.description,
     getFigmaDataTool.parameters,
-    (params: GetFigmaDataParams) =>
-      getFigmaDataTool.handler(params, figmaService, options.outputFormat),
+    (params: GetFigmaDataParams) => getFigmaDataTool.handler(params, options.outputFormat),
   );
 
-  // Register download_figma_images tool if CLI flag or env var is not set
+  // Register download_figma_images tool if not disabled
+  // Tool handles its own authentication via figmaAccessToken parameter
   if (!options.skipImageDownloads) {
     server.tool(
       downloadFigmaImagesTool.name,
       downloadFigmaImagesTool.description,
       downloadFigmaImagesTool.parameters,
-      (params: DownloadImagesParams) => downloadFigmaImagesTool.handler(params, figmaService),
+      (params: DownloadImagesParams) => downloadFigmaImagesTool.handler(params),
     );
   }
 }
