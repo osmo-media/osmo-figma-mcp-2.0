@@ -14,53 +14,41 @@ const serverInfo = {
 
 type CreateServerOptions = {
   isHTTP?: boolean;
-  outputFormat?: "yaml" | "json";
-  skipImageDownloads?: boolean;
 };
 
 /**
  * Creates an MCP server instance.
- * 
- * Authentication is handled per-request via the `figmaAccessToken` parameter
- * in each tool call. No server-level authentication is required.
+ *
+ * Authentication and output format are handled per-request via tool parameters.
+ * No server-level configuration is required.
  */
-function createServer(
-  { isHTTP = false, outputFormat = "yaml", skipImageDownloads = false }: CreateServerOptions = {},
-) {
+function createServer({ isHTTP = false }: CreateServerOptions = {}) {
   const server = new McpServer(serverInfo);
-  registerTools(server, { outputFormat, skipImageDownloads });
+  registerTools(server);
 
   Logger.isHTTP = isHTTP;
 
   return server;
 }
 
-function registerTools(
-  server: McpServer,
-  options: {
-    outputFormat: "yaml" | "json";
-    skipImageDownloads: boolean;
-  },
-): void {
+function registerTools(server: McpServer): void {
   // Register get_figma_data tool
-  // Tool handles its own authentication via figmaAccessToken parameter
+  // Tool handles its own authentication and output format via parameters
   server.tool(
     getFigmaDataTool.name,
     getFigmaDataTool.description,
     getFigmaDataTool.parameters,
-    (params: GetFigmaDataParams) => getFigmaDataTool.handler(params, options.outputFormat),
+    (params: GetFigmaDataParams) => getFigmaDataTool.handler(params),
   );
 
-  // Register download_figma_images tool if not disabled
+  // Register download_figma_images tool
   // Tool handles its own authentication via figmaAccessToken parameter
-  if (!options.skipImageDownloads) {
-    server.tool(
-      downloadFigmaImagesTool.name,
-      downloadFigmaImagesTool.description,
-      downloadFigmaImagesTool.parameters,
-      (params: DownloadImagesParams) => downloadFigmaImagesTool.handler(params),
-    );
-  }
+  server.tool(
+    downloadFigmaImagesTool.name,
+    downloadFigmaImagesTool.description,
+    downloadFigmaImagesTool.parameters,
+    (params: DownloadImagesParams) => downloadFigmaImagesTool.handler(params),
+  );
 }
 
 export { createServer };

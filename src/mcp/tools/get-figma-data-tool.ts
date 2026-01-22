@@ -35,7 +35,14 @@ const parameters = {
   figmaAccessToken: z
     .string()
     .describe(
-      "User's Figma access token. Can be either a Personal Access Token (PAT) or an OAuth token (starts with 'figd_'). Required for authentication.",
+      "User's Figma access token. Can be a Personal Access Token (PAT, starts with 'figd_') or OAuth token (starts with 'figu_'). Required for authentication.",
+    ),
+  outputFormat: z
+    .enum(["json", "yaml"])
+    .optional()
+    .default("json")
+    .describe(
+      "Output format. Defaults to 'json' which is recommended for LLMs. Use 'yaml' for more compact human-readable output.",
     ),
 };
 
@@ -46,9 +53,10 @@ export type GetFigmaDataParams = z.infer<typeof parametersSchema>;
  * Handler for get_figma_data tool.
  * Creates a FigmaService instance per-request using the provided access token.
  */
-async function getFigmaData(params: GetFigmaDataParams, outputFormat: "yaml" | "json") {
+async function getFigmaData(params: GetFigmaDataParams) {
   try {
-    const { fileKey, nodeId: rawNodeId, depth, figmaAccessToken } = parametersSchema.parse(params);
+    const { fileKey, nodeId: rawNodeId, depth, figmaAccessToken, outputFormat } =
+      parametersSchema.parse(params);
 
     // Create FigmaService with per-request token
     const figmaService = new FigmaService({ accessToken: figmaAccessToken });

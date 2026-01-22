@@ -2,6 +2,9 @@ export default {
   preset: "ts-jest/presets/default-esm",
   extensionsToTreatAsEsm: [".ts"],
   testEnvironment: "node",
+  testEnvironmentOptions: {
+    experimentalVmModules: true,
+  },
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",

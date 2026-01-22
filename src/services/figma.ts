@@ -33,9 +33,9 @@ export class FigmaService {
 
   constructor({ accessToken }: FigmaAuthOptions) {
     this.accessToken = accessToken;
-    // OAuth tokens start with "figd_" prefix, PATs are typically longer alphanumeric strings
+    // PAT tokens start with "figd_", OAuth tokens start with "figu_"
     // Both can be used with Bearer auth, but we log the type for debugging
-    this.isOAuthToken = accessToken.startsWith("figd_");
+    this.isOAuthToken = accessToken.startsWith("figu_");
   }
 
   private getAuthHeaders(): Record<string, string> {

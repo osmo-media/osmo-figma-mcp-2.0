@@ -68,7 +68,7 @@ const parameters = {
   figmaAccessToken: z
     .string()
     .describe(
-      "User's Figma access token. Can be either a Personal Access Token (PAT) or an OAuth token (starts with 'figd_'). Required for authentication.",
+      "User's Figma access token. Can be a Personal Access Token (PAT, starts with 'figd_') or OAuth token (starts with 'figu_'). Required for authentication.",
     ),
 };
 

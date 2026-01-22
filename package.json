@@ -15,7 +15,8 @@
   "scripts": {
     "build": "tsup --dts",
     "type-check": "tsc --noEmit",
-    "test": "jest",
+    "test": "tsx src/tests/run-test.ts",
+    "test:jest": "jest",
     "start": "node dist/bin.js",
     "start:cli": "cross-env NODE_ENV=cli node dist/bin.js",
     "start:http": "node dist/bin.js",

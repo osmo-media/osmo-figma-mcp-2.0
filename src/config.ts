@@ -6,14 +6,10 @@ import { resolve } from "path";
 interface ServerConfig {
   port: number;
   host: string;
-  outputFormat: "yaml" | "json";
-  skipImageDownloads: boolean;
   configSources: {
     port: "cli" | "env" | "default";
     host: "cli" | "env" | "default";
-    outputFormat: "cli" | "env" | "default";
     envFile: "cli" | "default";
-    skipImageDownloads: "cli" | "env" | "default";
   };
 }
 
@@ -21,15 +17,15 @@ interface CliArgs {
   env?: string;
   port?: number;
   host?: string;
-  json?: boolean;
-  "skip-image-downloads"?: boolean;
 }
 
 /**
  * Gets server configuration from CLI arguments and environment variables.
- * 
+ *
  * Note: Figma authentication is handled per-request via the `figmaAccessToken`
  * parameter in each tool call. No server-level authentication is configured here.
+ *
+ * Output format (JSON/YAML) is also handled per-request via tool parameters.
  */
 export function getServerConfig(isStdioMode: boolean): ServerConfig {
   // Parse command line arguments
@@ -46,16 +42,6 @@ export function getServerConfig(isStdioMode: boolean): ServerConfig {
       host: {
         type: "string",
         description: "Host to run the server on",
-      },
-      json: {
-        type: "boolean",
-        description: "Output data from tools in JSON format instead of YAML",
-        default: false,
-      },
-      "skip-image-downloads": {
-        type: "boolean",
-        description: "Do not register the download_figma_images tool (skip image downloads)",
-        default: false,
       },
     })
     .help()
@@ -80,14 +66,10 @@ export function getServerConfig(isStdioMode: boolean): ServerConfig {
   const config: ServerConfig = {
     port: 3333,
     host: "127.0.0.1",
-    outputFormat: "yaml",
-    skipImageDownloads: false,
     configSources: {
       port: "default",
       host: "default",
-      outputFormat: "default",
       envFile: envFileSource,
-      skipImageDownloads: "default",
     },
   };
 
@@ -112,38 +94,15 @@ export function getServerConfig(isStdioMode: boolean): ServerConfig {
     config.configSources.host = "env";
   }
 
-  // Handle JSON output format
-  if (argv.json) {
-    config.outputFormat = "json";
-    config.configSources.outputFormat = "cli";
-  } else if (process.env.OUTPUT_FORMAT) {
-    config.outputFormat = process.env.OUTPUT_FORMAT as "yaml" | "json";
-    config.configSources.outputFormat = "env";
-  }
-
-  // Handle skipImageDownloads
-  if (argv["skip-image-downloads"]) {
-    config.skipImageDownloads = true;
-    config.configSources.skipImageDownloads = "cli";
-  } else if (process.env.SKIP_IMAGE_DOWNLOADS === "true") {
-    config.skipImageDownloads = true;
-    config.configSources.skipImageDownloads = "env";
-  }
-
-  // Log configuration sources (no auth logging since it's per-request)
+  // Log configuration sources
   if (!isStdioMode) {
     console.log("\nConfiguration:");
     console.log(`- ENV_FILE: ${envFilePath} (source: ${config.configSources.envFile})`);
-    console.log("- Authentication: Per-request (via figmaAccessToken parameter in tool calls)");
-    console.log(`- FRAMELINK_PORT: ${config.port} (source: ${config.configSources.port})`);
-    console.log(`- FRAMELINK_HOST: ${config.host} (source: ${config.configSources.host})`);
-    console.log(
-      `- OUTPUT_FORMAT: ${config.outputFormat} (source: ${config.configSources.outputFormat})`,
-    );
-    console.log(
-      `- SKIP_IMAGE_DOWNLOADS: ${config.skipImageDownloads} (source: ${config.configSources.skipImageDownloads})`,
-    );
-    console.log(); // Empty line for better readability
+    console.log("- Authentication: Per-request (via figmaAccessToken parameter)");
+    console.log("- Output format: Per-request (via outputFormat parameter, defaults to JSON)");
+    console.log(`- PORT: ${config.port} (source: ${config.configSources.port})`);
+    console.log(`- HOST: ${config.host} (source: ${config.configSources.host})`);
+    console.log();
   }
 
   return config;
