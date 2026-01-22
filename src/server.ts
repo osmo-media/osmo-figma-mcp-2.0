@@ -41,6 +41,21 @@ export async function startServer(): Promise<void> {
 export async function startHttpServer(host: string, port: number, mcpServer: McpServer): Promise<void> {
   const app = express();
 
+  // CORS middleware - allow all origins for testing
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(200);
+      return;
+    }
+    
+    next();
+  });
+
   // Parse JSON requests for the Streamable HTTP endpoint only, will break SSE endpoint
   app.use("/mcp", express.json());
 
