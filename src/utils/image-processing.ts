@@ -1,47 +1,35 @@
-import fs from "fs";
-import path from "path";
 import sharp from "sharp";
 import type { Transform } from "@figma/rest-api-spec";
+import { Logger } from "./logger.js";
 
 /**
- * Apply crop transform to an image based on Figma's transformation matrix
- * @param imagePath - Path to the original image file
+ * Apply crop transform to an image buffer based on Figma's transformation matrix
+ * @param buffer - The image buffer
  * @param cropTransform - Figma transform matrix [[scaleX, skewX, translateX], [skewY, scaleY, translateY]]
- * @returns Promise<string> - Path to the cropped image
+ * @returns Promise<Buffer> - The cropped image buffer
  */
-export async function applyCropTransform(
-  imagePath: string,
+export async function applyCropTransformToBuffer(
+  buffer: Buffer,
   cropTransform: Transform,
-): Promise<string> {
-  const { Logger } = await import("./logger.js");
-
+): Promise<{ buffer: Buffer; cropRegion?: CropRegion }> {
   try {
     // Extract transform values
     const scaleX = cropTransform[0]?.[0] ?? 1;
-    const skewX = cropTransform[0]?.[1] ?? 0;
     const translateX = cropTransform[0]?.[2] ?? 0;
-    const skewY = cropTransform[1]?.[0] ?? 0;
     const scaleY = cropTransform[1]?.[1] ?? 1;
     const translateY = cropTransform[1]?.[2] ?? 0;
 
     // Load the image and get metadata
-    const image = sharp(imagePath);
+    const image = sharp(buffer);
     const metadata = await image.metadata();
 
     if (!metadata.width || !metadata.height) {
-      throw new Error(`Could not get image dimensions for ${imagePath}`);
+      throw new Error("Could not get image dimensions");
     }
 
     const { width, height } = metadata;
 
     // Calculate crop region based on transform matrix
-    // Figma's transform matrix represents how the image is positioned within its container
-    // We need to extract the visible portion based on the scaling and translation
-
-    // The transform matrix defines the visible area as:
-    // - scaleX/scaleY: how much of the original image is visible (0-1)
-    // - translateX/translateY: offset of the visible area (0-1, relative to image size)
-
     const cropLeft = Math.max(0, Math.round(translateX * width));
     const cropTop = Math.max(0, Math.round(translateY * height));
     const cropWidth = Math.min(width - cropLeft, Math.round(scaleX * width));
@@ -49,55 +37,46 @@ export async function applyCropTransform(
 
     // Validate crop dimensions
     if (cropWidth <= 0 || cropHeight <= 0) {
-      Logger.log(`Invalid crop dimensions for ${imagePath}, using original image`);
-      return imagePath;
+      Logger.log("Invalid crop dimensions, returning original buffer");
+      return { buffer };
     }
 
-    // Overwrite the original file with the cropped version
-    const tempPath = imagePath + ".tmp";
+    const cropRegion = { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight };
 
-    // Apply crop transformation to temporary file first
-    await image
+    // Apply crop transformation
+    const croppedBuffer = await image
       .extract({
         left: cropLeft,
         top: cropTop,
         width: cropWidth,
         height: cropHeight,
       })
-      .toFile(tempPath);
+      .toBuffer();
 
-    // Replace original file with cropped version
-    fs.renameSync(tempPath, imagePath);
+    Logger.log(`Cropped image: ${cropLeft}, ${cropTop}, ${cropWidth}x${cropHeight} from ${width}x${height}`);
 
-    Logger.log(`Cropped image saved (overwritten): ${imagePath}`);
-    Logger.log(
-      `Crop region: ${cropLeft}, ${cropTop}, ${cropWidth}x${cropHeight} from ${width}x${height}`,
-    );
-
-    return imagePath;
+    return { buffer: croppedBuffer, cropRegion };
   } catch (error) {
-    Logger.error(`Error cropping image ${imagePath}:`, error);
-    // Return original path if cropping fails
-    return imagePath;
+    Logger.error("Error cropping image buffer:", error);
+    // Return original buffer if cropping fails
+    return { buffer };
   }
 }
 
 /**
- * Get image dimensions from a file
- * @param imagePath - Path to the image file
+ * Get image dimensions from a buffer
+ * @param buffer - The image buffer
  * @returns Promise<{width: number, height: number}>
  */
-export async function getImageDimensions(imagePath: string): Promise<{
+export async function getBufferDimensions(buffer: Buffer): Promise<{
   width: number;
   height: number;
 }> {
-  const { Logger } = await import("./logger.js");
-
   try {
-    const metadata = await sharp(imagePath).metadata();
+    const metadata = await sharp(buffer).metadata();
 
     if (!metadata.width || !metadata.height) {
-      throw new Error(`Could not get image dimensions for ${imagePath}`);
+      throw new Error("Could not get image dimensions from buffer");
     }
 
     return {
@@ -105,112 +84,94 @@ export async function getImageDimensions(imagePath: string): Promise<{
       height: metadata.height,
     };
   } catch (error) {
-    Logger.error(`Error getting image dimensions for ${imagePath}:`, error);
+    Logger.error("Error getting buffer dimensions:", error);
     // Return default dimensions if reading fails
     return { width: 1000, height: 1000 };
   }
 }
 
-export type ImageProcessingResult = {
-  filePath: string;
+export type CropRegion = { left: number; top: number; width: number; height: number };
+
+export type BufferProcessingResult = {
+  buffer: Buffer;
+  fileName: string;
   originalDimensions: { width: number; height: number };
   finalDimensions: { width: number; height: number };
   wasCropped: boolean;
-  cropRegion?: { left: number; top: number; width: number; height: number };
+  cropRegion?: CropRegion;
   cssVariables?: string;
-  processingLog: string[];
 };
 
 /**
- * Enhanced image download with post-processing
- * @param fileName - The filename to save as
- * @param localPath - The local path to save to
+ * Download image from URL and process it in memory (no local files)
+ * @param fileName - The filename (used for content type detection)
  * @param imageUrl - Image URL
  * @param needsCropping - Whether to apply crop transform
  * @param cropTransform - Transform matrix for cropping
  * @param requiresImageDimensions - Whether to generate dimension metadata
- * @returns Promise<ImageProcessingResult> - Detailed processing information
+ * @returns Promise<BufferProcessingResult> - Processed image buffer and metadata
  */
-export async function downloadAndProcessImage(
+export async function downloadAndProcessImageToBuffer(
   fileName: string,
-  localPath: string,
   imageUrl: string,
   needsCropping: boolean = false,
   cropTransform?: Transform,
   requiresImageDimensions: boolean = false,
-): Promise<ImageProcessingResult> {
-  const { Logger } = await import("./logger.js");
-  const processingLog: string[] = [];
+): Promise<BufferProcessingResult> {
+  // Download image to buffer
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to download image: ${response.statusText}`);
+  }
 
-  // First download the original image
-  const { downloadFigmaImage } = await import("./common.js");
-  const originalPath = await downloadFigmaImage(fileName, localPath, imageUrl);
-  Logger.log(`Downloaded original image: ${originalPath}`);
+  const arrayBuffer = await response.arrayBuffer();
+  let buffer = Buffer.from(arrayBuffer);
+
+  Logger.log(`Downloaded image ${fileName}: ${buffer.length} bytes`);
 
   // Get original dimensions before any processing
-  const originalDimensions = await getImageDimensions(originalPath);
+  const originalDimensions = await getBufferDimensions(buffer);
   Logger.log(`Original dimensions: ${originalDimensions.width}x${originalDimensions.height}`);
 
-  let finalPath = originalPath;
   let wasCropped = false;
-  let cropRegion: { left: number; top: number; width: number; height: number } | undefined;
+  let cropRegion: CropRegion | undefined;
 
-  // Apply crop transform if needed
-  if (needsCropping && cropTransform) {
+  // Apply crop transform if needed (only for raster images)
+  const isSvg = fileName.toLowerCase().endsWith(".svg");
+  if (!isSvg && needsCropping && cropTransform) {
     Logger.log("Applying crop transform...");
-
-    // Extract crop region info before applying transform
-    const scaleX = cropTransform[0]?.[0] ?? 1;
-    const scaleY = cropTransform[1]?.[1] ?? 1;
-    const translateX = cropTransform[0]?.[2] ?? 0;
-    const translateY = cropTransform[1]?.[2] ?? 0;
-
-    const cropLeft = Math.max(0, Math.round(translateX * originalDimensions.width));
-    const cropTop = Math.max(0, Math.round(translateY * originalDimensions.height));
-    const cropWidth = Math.min(
-      originalDimensions.width - cropLeft,
-      Math.round(scaleX * originalDimensions.width),
-    );
-    const cropHeight = Math.min(
-      originalDimensions.height - cropTop,
-      Math.round(scaleY * originalDimensions.height),
-    );
-
-    if (cropWidth > 0 && cropHeight > 0) {
-      cropRegion = { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight };
-      finalPath = await applyCropTransform(originalPath, cropTransform);
-      wasCropped = true;
-      Logger.log(`Cropped to region: ${cropLeft}, ${cropTop}, ${cropWidth}x${cropHeight}`);
-    } else {
-      Logger.log("Invalid crop dimensions, keeping original image");
+    const cropResult = await applyCropTransformToBuffer(buffer, cropTransform);
+    buffer = cropResult.buffer;
+    cropRegion = cropResult.cropRegion;
+    wasCropped = !!cropRegion;
+    if (wasCropped) {
+      Logger.log(`Cropped to region: ${cropRegion!.left}, ${cropRegion!.top}, ${cropRegion!.width}x${cropRegion!.height}`);
     }
   }
 
   // Get final dimensions after processing
-  const finalDimensions = await getImageDimensions(finalPath);
+  const finalDimensions = isSvg ? originalDimensions : await getBufferDimensions(buffer);
   Logger.log(`Final dimensions: ${finalDimensions.width}x${finalDimensions.height}`);
 
-  // Generate CSS variables if required (for TILE mode)
+  // Generate CSS variables if required
   let cssVariables: string | undefined;
   if (requiresImageDimensions) {
     cssVariables = generateImageCSSVariables(finalDimensions);
   }
 
   return {
-    filePath: finalPath,
+    buffer,
+    fileName,
     originalDimensions,
     finalDimensions,
     wasCropped,
     cropRegion,
     cssVariables,
-    processingLog,
   };
 }
 
 /**
  * Create CSS custom properties for image dimensions
- * @param imagePath - Path to the image file
- * @returns Promise<string> - CSS custom properties
  */
 export function generateImageCSSVariables({
   width,

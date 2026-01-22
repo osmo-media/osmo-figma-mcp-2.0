@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FigmaService } from "../../services/figma.js";
+import { FigmaService, type S3UploadedImage } from "../../services/figma.js";
 import { Logger } from "../../utils/logger.js";
 
 const parameters = {
@@ -29,7 +29,7 @@ const parameters = {
           "File names must contain only letters, numbers, underscores, dots, or hyphens, and end with .png or .svg.",
         )
         .describe(
-          "The local name for saving the fetched file, including extension. Either png or svg.",
+          "The desired filename for the image, including extension. Either png or svg.",
         ),
       needsCropping: z
         .boolean()
@@ -60,11 +60,6 @@ const parameters = {
     .describe(
       "Export scale for PNG images. Optional, defaults to 2 if not specified. Affects PNG images only.",
     ),
-  localPath: z
-    .string()
-    .describe(
-      "The absolute path to the directory where images are stored in the project. If the directory does not exist, it will be created. The format of this path should respect the directory format of the operating system you are running on. Don't use any special character escaping in the path name either.",
-    ),
   figmaAccessToken: z
     .string()
     .describe(
@@ -77,12 +72,12 @@ export type DownloadImagesParams = z.infer<typeof parametersSchema>;
 
 /**
  * Handler for download_figma_images tool.
- * Creates a FigmaService instance per-request using the provided access token.
+ * Downloads images from Figma and uploads them directly to S3.
+ * Returns S3 URLs for the uploaded images.
  */
 async function downloadFigmaImages(params: DownloadImagesParams) {
   try {
-    const { fileKey, nodes, localPath, pngScale = 2, figmaAccessToken } =
-      parametersSchema.parse(params);
+    const { fileKey, nodes, pngScale = 2, figmaAccessToken } = parametersSchema.parse(params);
 
     // Create FigmaService with per-request token
     const figmaService = new FigmaService({ accessToken: figmaAccessToken });
@@ -144,39 +139,46 @@ async function downloadFigmaImages(params: DownloadImagesParams) {
       }
     }
 
-    const allDownloads = await figmaService.downloadImages(fileKey, localPath, downloadItems, {
+    // Download and upload to S3
+    const uploadedImages = await figmaService.downloadAndUploadImages(fileKey, downloadItems, {
       pngScale,
     });
 
-    const successCount = allDownloads.filter(Boolean).length;
+    const successCount = uploadedImages.length;
 
-    // Format results with aliases
-    const imagesList = allDownloads
-      .map((result, index) => {
-        const fileName = result.filePath.split("/").pop() || result.filePath;
-        const dimensions = `${result.finalDimensions.width}x${result.finalDimensions.height}`;
-        const cropStatus = result.wasCropped ? " (cropped)" : "";
+    // Build response with S3 URLs
+    const imagesOutput = uploadedImages.map((img, index) => {
+      const dimensions = `${img.dimensions.width}x${img.dimensions.height}`;
+      const cropStatus = img.wasCropped ? " (cropped)" : "";
 
-        const dimensionInfo = result.cssVariables
-          ? `${dimensions} | ${result.cssVariables}`
-          : dimensions;
+      // Show all the filenames that were requested for this download
+      const requestedNames = downloadToRequests.get(index) || [img.fileName];
+      const aliasText =
+        requestedNames.length > 1
+          ? ` (also requested as: ${requestedNames.filter((name: string) => name !== img.fileName).join(", ")})`
+          : "";
 
-        // Show all the filenames that were requested for this download
-        const requestedNames = downloadToRequests.get(index) || [fileName];
-        const aliasText =
-          requestedNames.length > 1
-            ? ` (also requested as: ${requestedNames.filter((name: string) => name !== fileName).join(", ")})`
-            : "";
+      return {
+        fileName: img.fileName,
+        s3Url: img.s3Url,
+        dimensions: img.dimensions,
+        wasCropped: img.wasCropped,
+        cssVariables: img.cssVariables,
+        aliases: requestedNames.length > 1 ? requestedNames.filter((name: string) => name !== img.fileName) : undefined,
+      };
+    });
 
-        return `- ${fileName}: ${dimensionInfo}${cropStatus}${aliasText}`;
-      })
-      .join("\n");
+    const response = {
+      success: true,
+      totalUploaded: successCount,
+      images: imagesOutput,
+    };
 
     return {
       content: [
         {
           type: "text" as const,
-          text: `Downloaded ${successCount} images:\n${imagesList}`,
+          text: JSON.stringify(response, null, 2),
         },
       ],
     };
@@ -187,7 +189,10 @@ async function downloadFigmaImages(params: DownloadImagesParams) {
       content: [
         {
           type: "text" as const,
-          text: `Failed to download images: ${error instanceof Error ? error.message : String(error)}`,
+          text: JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          }, null, 2),
         },
       ],
     };
@@ -198,7 +203,7 @@ async function downloadFigmaImages(params: DownloadImagesParams) {
 export const downloadFigmaImagesTool = {
   name: "download_figma_images",
   description:
-    "Download SVG and PNG images used in a Figma file based on the IDs of image or icon nodes",
+    "Download SVG and PNG images from a Figma file and upload them to S3. Returns S3 URLs for each uploaded image. Requires AWS S3 credentials in environment variables (AWS_REGION, AWS_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).",
   parameters,
   handler: downloadFigmaImages,
 } as const;

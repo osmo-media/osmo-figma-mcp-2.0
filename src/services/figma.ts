@@ -1,12 +1,14 @@
-import path from "path";
 import type {
   GetImagesResponse,
   GetFileResponse,
   GetFileNodesResponse,
   GetImageFillsResponse,
 } from "@figma/rest-api-spec";
-import { downloadFigmaImage } from "~/utils/common.js";
-import { downloadAndProcessImage, type ImageProcessingResult } from "~/utils/image-processing.js";
+import {
+  downloadAndProcessImageToBuffer,
+  type BufferProcessingResult,
+} from "~/utils/image-processing.js";
+import { uploadBufferToS3, getS3ConfigFromEnv, type S3Config } from "~/utils/s3-upload.js";
 import { Logger, writeLogs } from "~/utils/logger.js";
 import { fetchWithRetry } from "~/utils/fetch-with-retry.js";
 
@@ -24,6 +26,14 @@ type SvgOptions = {
   outlineText: boolean;
   includeId: boolean;
   simplifyStroke: boolean;
+};
+
+export type S3UploadedImage = {
+  fileName: string;
+  s3Url: string;
+  dimensions: { width: number; height: number };
+  wasCropped: boolean;
+  cssVariables?: string;
 };
 
 export class FigmaService {
@@ -133,7 +143,7 @@ export class FigmaService {
   }
 
   /**
-   * Download images method with post-processing support for cropping and returning image dimensions.
+   * Download images and upload directly to S3 (no local filesystem required).
    *
    * Supports:
    * - Image fills vs rendered nodes (based on imageRef vs nodeId)
@@ -141,11 +151,10 @@ export class FigmaService {
    * - Image cropping based on transform matrices
    * - CSS variable generation for image dimensions
    *
-   * @returns Array of local file paths for successfully downloaded images
+   * @returns Array of S3 URLs for successfully uploaded images
    */
-  async downloadImages(
+  async downloadAndUploadImages(
     fileKey: string,
-    localPath: string,
     items: Array<{
       imageRef?: string;
       nodeId?: string;
@@ -155,17 +164,18 @@ export class FigmaService {
       requiresImageDimensions?: boolean;
     }>,
     options: { pngScale?: number; svgOptions?: SvgOptions } = {},
-  ): Promise<ImageProcessingResult[]> {
+  ): Promise<S3UploadedImage[]> {
     if (items.length === 0) return [];
 
-    const sanitizedPath = path.normalize(localPath).replace(/^(\.\.(\/|\\|$))+/, "");
-    const resolvedPath = path.resolve(sanitizedPath);
-    if (!resolvedPath.startsWith(path.resolve(process.cwd()))) {
-      throw new Error("Invalid path specified. Directory traversal is not allowed.");
+    // Get S3 config from environment - required
+    const s3Config = getS3ConfigFromEnv();
+    if (!s3Config) {
+      throw new Error(
+        "S3 configuration not found. Required environment variables: AWS_REGION, AWS_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY",
+      );
     }
 
     const { pngScale = 2, svgOptions } = options;
-    const downloadPromises: Promise<ImageProcessingResult[]>[] = [];
 
     // Separate items by type
     const imageFills = items.filter(
@@ -175,36 +185,39 @@ export class FigmaService {
       (item): item is typeof item & { nodeId: string } => !!item.nodeId,
     );
 
-    // Download image fills with processing
+    // Collect all download jobs
+    const downloadJobs: Array<{
+      fileName: string;
+      imageUrl: string;
+      needsCropping?: boolean;
+      cropTransform?: any;
+      requiresImageDimensions?: boolean;
+    }> = [];
+
+    // Get URLs for image fills
     if (imageFills.length > 0) {
       const fillUrls = await this.getImageFillUrls(fileKey);
-      const fillDownloads = imageFills
-        .map(({ imageRef, fileName, needsCropping, cropTransform, requiresImageDimensions }) => {
-          const imageUrl = fillUrls[imageRef];
-          return imageUrl
-            ? downloadAndProcessImage(
-                fileName,
-                resolvedPath,
-                imageUrl,
-                needsCropping,
-                cropTransform,
-                requiresImageDimensions,
-              )
-            : null;
-        })
-        .filter((promise): promise is Promise<ImageProcessingResult> => promise !== null);
-
-      if (fillDownloads.length > 0) {
-        downloadPromises.push(Promise.all(fillDownloads));
+      for (const fill of imageFills) {
+        const imageUrl = fillUrls[fill.imageRef];
+        if (imageUrl) {
+          downloadJobs.push({
+            fileName: fill.fileName,
+            imageUrl,
+            needsCropping: fill.needsCropping,
+            cropTransform: fill.cropTransform,
+            requiresImageDimensions: fill.requiresImageDimensions,
+          });
+        } else {
+          Logger.log(`No URL found for imageRef: ${fill.imageRef}`);
+        }
       }
     }
 
-    // Download rendered nodes with processing
+    // Get URLs for rendered nodes
     if (renderNodes.length > 0) {
       const pngNodes = renderNodes.filter((node) => !node.fileName.toLowerCase().endsWith(".svg"));
       const svgNodes = renderNodes.filter((node) => node.fileName.toLowerCase().endsWith(".svg"));
 
-      // Download PNG renders
       if (pngNodes.length > 0) {
         const pngUrls = await this.getNodeRenderUrls(
           fileKey,
@@ -212,59 +225,87 @@ export class FigmaService {
           "png",
           { pngScale },
         );
-        const pngDownloads = pngNodes
-          .map(({ nodeId, fileName, needsCropping, cropTransform, requiresImageDimensions }) => {
-            const imageUrl = pngUrls[nodeId];
-            return imageUrl
-              ? downloadAndProcessImage(
-                  fileName,
-                  resolvedPath,
-                  imageUrl,
-                  needsCropping,
-                  cropTransform,
-                  requiresImageDimensions,
-                )
-              : null;
-          })
-          .filter((promise): promise is Promise<ImageProcessingResult> => promise !== null);
-
-        if (pngDownloads.length > 0) {
-          downloadPromises.push(Promise.all(pngDownloads));
+        for (const node of pngNodes) {
+          const imageUrl = pngUrls[node.nodeId];
+          if (imageUrl) {
+            downloadJobs.push({
+              fileName: node.fileName,
+              imageUrl,
+              needsCropping: node.needsCropping,
+              cropTransform: node.cropTransform,
+              requiresImageDimensions: node.requiresImageDimensions,
+            });
+          } else {
+            Logger.log(`No URL found for node: ${node.nodeId}`);
+          }
         }
       }
 
-      // Download SVG renders
       if (svgNodes.length > 0) {
+        const svgOpts = svgOptions || {
+          outlineText: true,
+          includeId: false,
+          simplifyStroke: true,
+        };
         const svgUrls = await this.getNodeRenderUrls(
           fileKey,
           svgNodes.map((n) => n.nodeId),
           "svg",
-          { svgOptions },
+          { svgOptions: svgOpts },
         );
-        const svgDownloads = svgNodes
-          .map(({ nodeId, fileName, needsCropping, cropTransform, requiresImageDimensions }) => {
-            const imageUrl = svgUrls[nodeId];
-            return imageUrl
-              ? downloadAndProcessImage(
-                  fileName,
-                  resolvedPath,
-                  imageUrl,
-                  needsCropping,
-                  cropTransform,
-                  requiresImageDimensions,
-                )
-              : null;
-          })
-          .filter((promise): promise is Promise<ImageProcessingResult> => promise !== null);
-
-        if (svgDownloads.length > 0) {
-          downloadPromises.push(Promise.all(svgDownloads));
+        for (const node of svgNodes) {
+          const imageUrl = svgUrls[node.nodeId];
+          if (imageUrl) {
+            downloadJobs.push({
+              fileName: node.fileName,
+              imageUrl,
+              needsCropping: node.needsCropping,
+              cropTransform: node.cropTransform,
+              requiresImageDimensions: node.requiresImageDimensions,
+            });
+          } else {
+            Logger.log(`No URL found for SVG node: ${node.nodeId}`);
+          }
         }
       }
     }
 
-    const results = await Promise.all(downloadPromises);
-    return results.flat();
+    // Process all downloads in parallel: download -> process -> upload to S3
+    const results = await Promise.allSettled(
+      downloadJobs.map(async (job) => {
+        // Download and process in memory
+        const processed = await downloadAndProcessImageToBuffer(
+          job.fileName,
+          job.imageUrl,
+          job.needsCropping,
+          job.cropTransform,
+          job.requiresImageDimensions,
+        );
+
+        // Upload buffer directly to S3
+        const s3Result = await uploadBufferToS3(processed.buffer, processed.fileName, s3Config);
+
+        return {
+          fileName: processed.fileName,
+          s3Url: s3Result.url,
+          dimensions: processed.finalDimensions,
+          wasCropped: processed.wasCropped,
+          cssVariables: processed.cssVariables,
+        } as S3UploadedImage;
+      }),
+    );
+
+    // Filter successful results
+    const successfulResults: S3UploadedImage[] = [];
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        successfulResults.push(result.value);
+      } else {
+        Logger.error("Failed to process/upload image:", result.reason);
+      }
+    }
+
+    return successfulResults;
   }
 
   /**
