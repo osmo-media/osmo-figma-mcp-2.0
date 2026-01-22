@@ -1,113 +1,141 @@
-<a href="https://www.framelink.ai/?utm_source=github&utm_medium=referral&utm_campaign=readme" target="_blank" rel="noopener">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://www.framelink.ai/github/HeaderDark.png" />
-    <img alt="Framelink" src="https://www.framelink.ai/github/HeaderLight.png" />
-  </picture>
-</a>
+# Figma MCP Server
 
-<div align="center">
-  <h1>Framelink MCP for Figma</h1>
-  <p>
-    🌐 Available in:
-    <a href="README.ko.md">한국어 (Korean)</a> |
-    <a href="README.ja.md">日本語 (Japanese)</a> |
-    <a href="README.zh-cn.md">简体中文 (Simplified Chinese)</a> |
-    <a href="README.zh-tw.md">繁體中文 (Traditional Chinese)</a>
-  </p>
-  <h3>Give your coding agent access to your Figma data.<br/>Implement designs in any framework in one-shot.</h3>
-  <a href="https://npmcharts.com/compare/figma-developer-mcp?interval=30">
-    <img alt="weekly downloads" src="https://img.shields.io/npm/dm/figma-developer-mcp.svg">
-  </a>
-  <a href="https://github.com/GLips/Figma-Context-MCP/blob/main/LICENSE">
-    <img alt="MIT License" src="https://img.shields.io/github/license/GLips/Figma-Context-MCP" />
-  </a>
-  <a href="https://framelink.ai/discord">
-    <img alt="Discord" src="https://img.shields.io/discord/1352337336913887343?color=7389D8&label&logo=discord&logoColor=ffffff" />
-  </a>
-  <br />
-  <a href="https://twitter.com/glipsman">
-    <img alt="Twitter" src="https://img.shields.io/twitter/url?url=https%3A%2F%2Fx.com%2Fglipsman&label=%40glipsman" />
-  </a>
-</div>
+Internal MCP server for Figma design data extraction. Optimized for motion graphics and precise design implementation.
 
-<br/>
+## Features
 
-Give [Cursor](https://cursor.sh/) and other AI-powered coding tools access to your Figma files with this [Model Context Protocol](https://modelcontextprotocol.io/introduction) server.
+- **Per-request authentication** - Supports both Personal Access Tokens (PAT) and OAuth tokens
+- **Direct S3 uploads** - Images and screenshots automatically uploaded to S3 with permanent URLs
+- **Design data extraction** - Simplified JSON structure optimized for AI code generation
+- **Screenshot tool** - Capture visual references of Figma nodes
+- **Motion graphics focused** - Preserves exact measurements for non-responsive layouts
 
-When Cursor has access to Figma design data, it's **way** better at one-shotting designs accurately than alternative approaches like pasting screenshots.
+## Quick Start
 
-<h3><a href="https://www.framelink.ai/docs/quickstart?utm_source=github&utm_medium=referral&utm_campaign=readme">See quickstart instructions →</a></h3>
+### Local Development
 
-## Demo
-
-[Watch a demo of building a UI in Cursor with Figma design data](https://youtu.be/6G9yb-LrEqg)
-
-[![Watch the video](https://img.youtube.com/vi/6G9yb-LrEqg/maxresdefault.jpg)](https://youtu.be/6G9yb-LrEqg)
-
-## How it works
-
-1. Open your IDE's chat (e.g. agent mode in Cursor).
-2. Paste a link to a Figma file, frame, or group.
-3. Ask Cursor to do something with the Figma file—e.g. implement the design.
-4. Cursor will fetch the relevant metadata from Figma and use it to write your code.
-
-This MCP server is specifically designed for use with Cursor. Before responding with context from the [Figma API](https://www.figma.com/developers/api), it simplifies and translates the response so only the most relevant layout and styling information is provided to the model.
-
-Reducing the amount of context provided to the model helps make the AI more accurate and the responses more relevant.
-
-## Getting Started
-
-Many code editors and other AI clients use a configuration file to manage MCP servers.
-
-The `figma-developer-mcp` server can be configured by adding the following to your configuration file.
-
-> NOTE: This server uses **per-request authentication**. Each tool call includes the Figma access token as a parameter, so no server-level authentication is required. You can obtain a Personal Access Token from your [Figma account settings](https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens).
-
-### MacOS / Linux
-
-```json
-{
-  "mcpServers": {
-    "Framelink MCP for Figma": {
-      "command": "npx",
-      "args": ["-y", "figma-developer-mcp", "--stdio"]
-    }
-  }
-}
+1. Install dependencies:
+```bash
+pnpm install
 ```
 
-### Windows
-
-```json
-{
-  "mcpServers": {
-    "Framelink MCP for Figma": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "figma-developer-mcp", "--stdio"]
-    }
-  }
-}
+2. Create `.env` file (copy from `.env.example`):
+```bash
+cp .env.example .env
+# Add your test credentials
 ```
 
-### Authentication
-
-Authentication is handled per-request. When calling tools, provide your Figma access token (Personal Access Token or OAuth token) via the `figmaAccessToken` parameter:
-
-```typescript
-{
-  "fileKey": "your-file-key",
-  "figmaAccessToken": "your-figma-token"
-}
+3. Run tests:
+```bash
+pnpm test
 ```
 
-This architecture allows multiple users to share the same MCP server instance, each with their own credentials.
+4. Start server:
+```bash
+pnpm start
+# Server runs on http://127.0.0.1:3333
+```
 
-If you need more information on how to configure the Framelink MCP for Figma, see the [Framelink docs](https://www.framelink.ai/docs/quickstart?utm_source=github&utm_medium=referral&utm_campaign=readme).
+### AWS Deployment
 
-## Star History
+Deploy to EC2 in 4 simple steps:
 
-<a href="https://star-history.com/#GLips/Figma-Context-MCP"><img src="https://api.star-history.com/svg?repos=GLips/Figma-Context-MCP&type=Date" alt="Star History Chart" width="600" /></a>
+```bash
+cd deployment
 
-## Learn More
+# 1. Configure AWS CLI (one-time)
+./1_configure_aws.sh
 
-The Framelink MCP for Figma is simple but powerful. Get the most out of it by learning more at the [Framelink](https://framelink.ai?utm_source=github&utm_medium=referral&utm_campaign=readme) site.
+# 2. Launch EC2 instance
+./2_launch_instance.sh
+# Returns PUBLIC_IP
+
+# 3. Deploy server
+./3_deploy_code.sh <PUBLIC_IP>
+
+# 4. Configure S3 credentials
+./4_setup_s3.sh <PUBLIC_IP>
+```
+
+Server will be available at `http://<PUBLIC_IP>:3333`
+
+## Available Tools
+
+### `get_figma_data`
+Fetches design data from Figma with embedded S3 image URLs.
+
+**Parameters:**
+- `fileKey` - Figma file key (from URL)
+- `nodeId` - Optional specific node ID
+- `figmaAccessToken` - PAT or OAuth token
+- `downloadImages` - Auto-download images to S3 (default: true)
+- `outputFormat` - `json` or `yaml` (default: json)
+
+### `get_figma_screenshot`
+Takes a screenshot of a Figma node and uploads to S3.
+
+**Parameters:**
+- `fileKey` - Figma file key
+- `nodeId` - Node to screenshot
+- `figmaAccessToken` - PAT or OAuth token
+- `format` - `png`, `jpg`, or `svg` (default: png)
+- `scale` - Export scale 0.5-4x (default: 2)
+
+### `download_figma_images`
+Supplementary tool for downloading specific images.
+
+**Parameters:**
+- `fileKey` - Figma file key
+- `nodes` - Array of image nodes with metadata
+- `figmaAccessToken` - PAT or OAuth token
+- `pngScale` - Export scale (default: 2)
+
+## Configuration
+
+### Required Environment Variables (EC2)
+
+```bash
+# Server
+NODE_ENV=production
+PORT=3333
+
+# S3 (for image uploads)
+AWS_REGION=us-east-2
+AWS_BUCKET_NAME=your-bucket
+AWS_ACCESS_KEY_ID=your-key
+AWS_SECRET_ACCESS_KEY=your-secret
+```
+
+### Optional Variables
+
+```bash
+AWS_TRANSFER_ACCELERATION=false  # Enable S3 acceleration
+HOST=0.0.0.0                     # Server bind address
+```
+
+## Architecture
+
+- **Per-request auth** - No tokens stored on server
+- **Direct S3 upload** - Images processed in memory, no local storage
+- **Systemd service** - Auto-restart on failure
+- **Ubuntu 24.04** - EC2 instances use latest LTS
+
+## Development
+
+```bash
+# Run tests
+pnpm test
+
+# Build
+pnpm build
+
+# Type check
+pnpm type-check
+
+# Lint
+pnpm lint
+```
+
+## License
+
+MIT
