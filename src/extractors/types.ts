@@ -70,7 +70,7 @@ export interface SimplifiedDesign {
 export interface SimplifiedNode {
   id: string;
   name: string;
-  type: string; // e.g. FRAME, TEXT, INSTANCE, RECTANGLE, etc.
+  type: string; // e.g. FRAME, TEXT, INSTANCE, RECTANGLE, IMAGE-SVG, etc.
   // text
   text?: string;
   textStyle?: string;
@@ -92,6 +92,10 @@ export interface SimplifiedNode {
   componentProperties?: ComponentProperties[];
   // children
   children?: SimplifiedNode[];
+  /**
+   * S3 URL for IMAGE-SVG nodes. Added when downloadImages=true.
+   */
+  imageUrl?: string;
 }
 
 export interface BoundingBox {

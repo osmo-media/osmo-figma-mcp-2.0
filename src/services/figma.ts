@@ -309,6 +309,127 @@ export class FigmaService {
   }
 
   /**
+   * Process all images in a design: download from Figma, process (crop if needed), upload to S3.
+   * Returns a map of (imageRef or nodeId) -> S3 URL for injection into the design.
+   *
+   * @param fileKey - Figma file key
+   * @param imageFills - Map of unique key -> image fill info (from collectImageReferences)
+   * @param svgNodeIds - Array of node IDs for IMAGE-SVG nodes
+   * @param options - Processing options (pngScale)
+   * @returns Map of unique key (imageRef or nodeId) -> S3 URL
+   */
+  async processDesignImages(
+    fileKey: string,
+    imageFills: Map<string, { imageRef: string; needsCropping: boolean; cropTransform?: number[][]; requiresImageDimensions: boolean; filenameSuffix?: string }>,
+    svgNodeIds: string[],
+    options: { pngScale?: number } = {},
+  ): Promise<Map<string, string>> {
+    const urlMap = new Map<string, string>();
+    const { pngScale = 2 } = options;
+
+    // Get S3 config - if not available, return empty map (caller handles gracefully)
+    const s3Config = getS3ConfigFromEnv();
+    if (!s3Config) {
+      Logger.log("S3 configuration not found, skipping image processing");
+      return urlMap;
+    }
+
+    const downloadJobs: Array<{
+      uniqueKey: string;
+      fileName: string;
+      imageUrl: string;
+      needsCropping: boolean;
+      cropTransform?: number[][];
+      requiresImageDimensions: boolean;
+    }> = [];
+
+    // Get URLs for image fills
+    if (imageFills.size > 0) {
+      const fillUrls = await this.getImageFillUrls(fileKey);
+      for (const [uniqueKey, info] of imageFills) {
+        const imageUrl = fillUrls[info.imageRef];
+        if (imageUrl) {
+          // Generate filename from imageRef (use suffix if present for uniqueness)
+          const fileName = info.filenameSuffix
+            ? `${info.imageRef.substring(0, 8)}-${info.filenameSuffix}.png`
+            : `${info.imageRef.substring(0, 8)}.png`;
+
+          downloadJobs.push({
+            uniqueKey,
+            fileName,
+            imageUrl,
+            needsCropping: info.needsCropping,
+            cropTransform: info.cropTransform,
+            requiresImageDimensions: info.requiresImageDimensions,
+          });
+        } else {
+          Logger.log(`No URL found for imageRef: ${info.imageRef}`);
+        }
+      }
+    }
+
+    // Get URLs for SVG nodes
+    if (svgNodeIds.length > 0) {
+      const svgUrls = await this.getNodeRenderUrls(fileKey, svgNodeIds, "svg");
+      for (const nodeId of svgNodeIds) {
+        const imageUrl = svgUrls[nodeId];
+        if (imageUrl) {
+          // Generate filename from nodeId
+          const fileName = `${nodeId.replace(/:/g, "-")}.svg`;
+          downloadJobs.push({
+            uniqueKey: nodeId,
+            fileName,
+            imageUrl,
+            needsCropping: false,
+            requiresImageDimensions: false,
+          });
+        } else {
+          Logger.log(`No URL found for SVG node: ${nodeId}`);
+        }
+      }
+    }
+
+    if (downloadJobs.length === 0) {
+      return urlMap;
+    }
+
+    Logger.log(`Processing ${downloadJobs.length} images for S3 upload...`);
+
+    // Process all downloads in parallel
+    const results = await Promise.allSettled(
+      downloadJobs.map(async (job) => {
+        const processed = await downloadAndProcessImageToBuffer(
+          job.fileName,
+          job.imageUrl,
+          job.needsCropping,
+          job.cropTransform,
+          job.requiresImageDimensions,
+        );
+
+        const s3Result = await uploadBufferToS3(processed.buffer, processed.fileName, s3Config);
+
+        return {
+          uniqueKey: job.uniqueKey,
+          s3Url: s3Result.url,
+        };
+      }),
+    );
+
+    // Build URL map from successful results
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        urlMap.set(result.value.uniqueKey, result.value.s3Url);
+      } else {
+        Logger.error("Failed to process image:", result.reason);
+      }
+    }
+
+    Logger.log(`Successfully processed ${urlMap.size}/${downloadJobs.length} images`);
+
+    return urlMap;
+  }
+
+  /**
    * Get raw Figma API response for a file (for use with flexible extractors)
    */
   async getRawFile(fileKey: string, depth?: number | null): Promise<GetFileResponse> {

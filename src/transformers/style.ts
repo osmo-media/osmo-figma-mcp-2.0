@@ -26,7 +26,16 @@ export interface ColorValue {
  */
 export type SimplifiedImageFill = {
   type: "IMAGE";
-  imageRef: string;
+  /**
+   * Figma image reference hash. Present when downloadImages=false.
+   * When downloadImages=true, this is replaced with imageUrl.
+   */
+  imageRef?: string;
+  /**
+   * S3 URL for the processed image. Present when downloadImages=true.
+   * Replaces imageRef after automatic image processing.
+   */
+  imageUrl?: string;
   scaleMode: "FILL" | "FIT" | "TILE" | "STRETCH";
   /**
    * For TILE mode, the scaling factor relative to original image size
@@ -42,7 +51,7 @@ export type SimplifiedImageFill = {
   objectFit?: string;
 
   // Image processing metadata (NOT for CSS translation)
-  // Used by download tools to determine post-processing needs
+  // Used internally for download tools. Removed from output after processing.
   imageDownloadArguments?: {
     /**
      * Whether image needs cropping based on transform

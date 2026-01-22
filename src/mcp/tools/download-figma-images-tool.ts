@@ -203,7 +203,7 @@ async function downloadFigmaImages(params: DownloadImagesParams) {
 export const downloadFigmaImagesTool = {
   name: "download_figma_images",
   description:
-    "Download SVG and PNG images from a Figma file and upload them to S3. Returns S3 URLs for each uploaded image. Requires AWS S3 credentials in environment variables (AWS_REGION, AWS_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).",
+    "Supplementary tool for selective image downloads. NOTE: get_figma_data already embeds S3 URLs automatically when downloadImages=true. Use this tool only when you need to: (1) re-download specific images at different scales, (2) download images selectively when get_figma_data was called with downloadImages=false, or (3) download additional images not in the original response.",
   parameters,
   handler: downloadFigmaImages,
 } as const;
