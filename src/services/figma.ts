@@ -460,4 +460,78 @@ export class FigmaService {
 
     return response;
   }
+
+  /**
+   * Take a screenshot of a Figma node and upload directly to S3.
+   * Returns the permanent S3 URL and image dimensions.
+   *
+   * @param fileKey - Figma file key
+   * @param nodeId - Node ID to screenshot
+   * @param options - Screenshot options (format, scale)
+   * @returns S3 URL and image metadata
+   */
+  async screenshotToS3(
+    fileKey: string,
+    nodeId: string,
+    options: { format?: "png" | "jpg" | "svg"; scale?: number } = {},
+  ): Promise<{ s3Url: string; dimensions: { width: number; height: number }; format: string; scale: number }> {
+    const { format = "png", scale = 2 } = options;
+
+    // Get S3 config - required for this method
+    const s3Config = getS3ConfigFromEnv();
+    if (!s3Config) {
+      throw new Error(
+        "S3 configuration not found. Required environment variables: AWS_REGION, AWS_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY",
+      );
+    }
+
+    Logger.log(`Taking screenshot of node ${nodeId} from file ${fileKey} (${format}, ${scale}x)`);
+
+    // Get render URL from Figma
+    const renderUrls = await this.getNodeRenderUrls(
+      fileKey,
+      [nodeId],
+      format === "jpg" ? "png" : format, // Figma API doesn't support jpg directly, we use png
+      { pngScale: scale },
+    );
+
+    const renderUrl = renderUrls[nodeId];
+    if (!renderUrl) {
+      throw new Error(`No render URL found for node ${nodeId}. The node may not exist or may not be renderable.`);
+    }
+
+    // Download to buffer
+    const response = await fetch(renderUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download screenshot: ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    Logger.log(`Downloaded screenshot: ${buffer.length} bytes`);
+
+    // Get dimensions (for non-SVG)
+    let dimensions = { width: 0, height: 0 };
+    if (format !== "svg") {
+      const { getBufferDimensions } = await import("~/utils/image-processing.js");
+      dimensions = await getBufferDimensions(buffer);
+      Logger.log(`Screenshot dimensions: ${dimensions.width}x${dimensions.height}`);
+    }
+
+    // Generate filename
+    const fileName = `screenshot-${nodeId.replace(/:/g, "-")}.${format}`;
+
+    // Upload to S3
+    const s3Result = await uploadBufferToS3(buffer, fileName, s3Config);
+
+    Logger.log(`Screenshot uploaded to S3: ${s3Result.url}`);
+
+    return {
+      s3Url: s3Result.url,
+      dimensions,
+      format,
+      scale,
+    };
+  }
 }

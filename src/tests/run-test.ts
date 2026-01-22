@@ -195,6 +195,42 @@ async function runTest() {
       console.log("⏭️  Test 3: Skipping supplementary tool test (no S3 config)\n");
     }
 
+    // Test 4: Screenshot to S3
+    if (hasS3Config) {
+      console.log("📸 Test 4: Taking screenshot and uploading to S3...");
+
+      const screenshotResult = await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "get_figma_screenshot",
+            arguments: {
+              fileKey: TEST_FILE_KEY,
+              nodeId: TEST_NODE_ID,
+              figmaAccessToken: TEST_FIGMA_TOKEN,
+              scale: 1,
+              format: "png",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      const screenshotContent = screenshotResult.content[0].text as string;
+      const screenshotParsed = JSON.parse(screenshotContent);
+
+      if (screenshotParsed.success) {
+        console.log(`   ✅ Screenshot uploaded to S3`);
+        console.log(`      - Dimensions: ${screenshotParsed.dimensions.width}x${screenshotParsed.dimensions.height}`);
+        console.log(`      - S3 URL: ${screenshotParsed.s3Url}`);
+        console.log();
+      } else {
+        console.log(`   ⚠️  Screenshot failed: ${screenshotParsed.error}\n`);
+      }
+    } else {
+      console.log("⏭️  Test 4: Skipping screenshot test (no S3 config)\n");
+    }
+
     console.log("🎉 All tests passed!\n");
   } catch (error) {
     console.error("❌ Test failed:", error);

@@ -3,8 +3,10 @@ import { Logger } from "../utils/logger.js";
 import {
   downloadFigmaImagesTool,
   getFigmaDataTool,
+  getFigmaScreenshotTool,
   type DownloadImagesParams,
   type GetFigmaDataParams,
+  type GetFigmaScreenshotParams,
 } from "./tools/index.js";
 
 const serverInfo = {
@@ -48,6 +50,15 @@ function registerTools(server: McpServer): void {
     downloadFigmaImagesTool.description,
     downloadFigmaImagesTool.parameters,
     (params: DownloadImagesParams) => downloadFigmaImagesTool.handler(params),
+  );
+
+  // Register get_figma_screenshot tool
+  // Takes a screenshot of a node and uploads to S3
+  server.tool(
+    getFigmaScreenshotTool.name,
+    getFigmaScreenshotTool.description,
+    getFigmaScreenshotTool.parameters,
+    (params: GetFigmaScreenshotParams) => getFigmaScreenshotTool.handler(params),
   );
 }
 
