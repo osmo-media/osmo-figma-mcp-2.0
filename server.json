@@ -25,13 +25,6 @@
       ],
       "environment_variables": [
         {
-          "description": "Your Figma Personal Access Token, learn more here: https://www.figma.com/developers/api#access-tokens",
-          "is_required": true,
-          "format": "string",
-          "is_secret": true,
-          "name": "FIGMA_API_KEY"
-        },
-        {
           "name": "NODE_ENV",
           "description": "Start the server in stdio mode, keep as CLI",
           "default": "cli"

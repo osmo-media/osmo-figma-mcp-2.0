@@ -11,13 +11,14 @@ config();
 describe("Figma MCP Server Tests", () => {
   let server: McpServer;
   let client: Client;
-  let figmaApiKey: string;
+  let figmaAccessToken: string;
   let figmaFileKey: string;
 
   beforeAll(async () => {
-    figmaApiKey = process.env.FIGMA_API_KEY || "";
-    if (!figmaApiKey) {
-      throw new Error("FIGMA_API_KEY is not set in environment variables");
+    // Accept either FIGMA_API_KEY (PAT) or FIGMA_ACCESS_TOKEN
+    figmaAccessToken = process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_API_KEY || "";
+    if (!figmaAccessToken) {
+      throw new Error("FIGMA_ACCESS_TOKEN or FIGMA_API_KEY is not set in environment variables");
     }
 
     figmaFileKey = process.env.FIGMA_FILE_KEY || "";
@@ -25,11 +26,8 @@ describe("Figma MCP Server Tests", () => {
       throw new Error("FIGMA_FILE_KEY is not set in environment variables");
     }
 
-    server = createServer({
-      figmaApiKey,
-      figmaOAuthToken: "",
-      useOAuth: false,
-    });
+    // Create server without auth - authentication is per-request
+    server = createServer();
 
     client = new Client(
       {
@@ -56,6 +54,7 @@ describe("Figma MCP Server Tests", () => {
     it("should be able to get Figma file data", async () => {
       const args: any = {
         fileKey: figmaFileKey,
+        figmaAccessToken, // Pass token per-request
       };
 
       const result = await client.request(

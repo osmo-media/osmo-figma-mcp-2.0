@@ -61,7 +61,7 @@ Many code editors and other AI clients use a configuration file to manage MCP se
 
 The `figma-developer-mcp` server can be configured by adding the following to your configuration file.
 
-> NOTE: You will need to create a Figma access token to use this server. Instructions on how to create a Figma API access token can be found [here](https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens).
+> NOTE: This server uses **per-request authentication**. Each tool call includes the Figma access token as a parameter, so no server-level authentication is required. You can obtain a Personal Access Token from your [Figma account settings](https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens).
 
 ### MacOS / Linux
 
@@ -70,7 +70,7 @@ The `figma-developer-mcp` server can be configured by adding the following to yo
   "mcpServers": {
     "Framelink MCP for Figma": {
       "command": "npx",
-      "args": ["-y", "figma-developer-mcp", "--figma-api-key=YOUR-KEY", "--stdio"]
+      "args": ["-y", "figma-developer-mcp", "--stdio"]
     }
   }
 }
@@ -83,13 +83,24 @@ The `figma-developer-mcp` server can be configured by adding the following to yo
   "mcpServers": {
     "Framelink MCP for Figma": {
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "figma-developer-mcp", "--figma-api-key=YOUR-KEY", "--stdio"]
+      "args": ["/c", "npx", "-y", "figma-developer-mcp", "--stdio"]
     }
   }
 }
 ```
 
-Or you can set `FIGMA_API_KEY` and `PORT` in the `env` field.
+### Authentication
+
+Authentication is handled per-request. When calling tools, provide your Figma access token (Personal Access Token or OAuth token) via the `figmaAccessToken` parameter:
+
+```typescript
+{
+  "fileKey": "your-file-key",
+  "figmaAccessToken": "your-figma-token"
+}
+```
+
+This architecture allows multiple users to share the same MCP server instance, each with their own credentials.
 
 If you need more information on how to configure the Framelink MCP for Figma, see the [Framelink docs](https://www.framelink.ai/docs/quickstart?utm_source=github&utm_medium=referral&utm_campaign=readme).
 
