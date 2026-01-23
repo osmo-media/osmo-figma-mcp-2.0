@@ -134,6 +134,24 @@ export const visualsExtractor: ExtractorFn = (node, result, context) => {
   if (hasValue("rectangleCornerRadii", node, isRectangleCornerRadii)) {
     result.borderRadius = `${node.rectangleCornerRadii[0]}px ${node.rectangleCornerRadii[1]}px ${node.rectangleCornerRadii[2]}px ${node.rectangleCornerRadii[3]}px`;
   }
+
+  // clipsContent - important for overflow: hidden in CSS
+  if (hasValue("clipsContent", node) && node.clipsContent === true) {
+    result.clipsContent = true;
+  }
+
+  // blendMode - maps to CSS mix-blend-mode
+  if (hasValue("blendMode", node) && node.blendMode !== "PASS_THROUGH") {
+    result.blendMode = node.blendMode;
+  }
+
+  // rotation - extracted from relativeTransform matrix
+  if (hasValue("relativeTransform", node) && Array.isArray(node.relativeTransform)) {
+    const rotation = extractRotationFromTransform(node.relativeTransform as number[][]);
+    if (rotation !== 0) {
+      result.rotation = `${rotation}deg`;
+    }
+  }
 };
 
 /**
@@ -174,6 +192,27 @@ function getStyleName(
     }
   }
   return undefined;
+}
+
+/**
+ * Extract rotation angle in degrees from a Figma relativeTransform matrix.
+ * The matrix is [[a, c, e], [b, d, f]] where rotation = atan2(b, a).
+ * Returns 0 if no rotation is applied.
+ */
+function extractRotationFromTransform(transform: number[][]): number {
+  if (!transform || transform.length < 2) return 0;
+
+  // Matrix format: [[a, c, e], [b, d, f]]
+  const a = transform[0][0];
+  const b = transform[1][0];
+
+  // Calculate rotation in radians, then convert to degrees
+  const radians = Math.atan2(b, a);
+  const degrees = radians * (180 / Math.PI);
+
+  // Round to 2 decimal places and return 0 for negligible rotations
+  const rounded = Math.round(degrees * 100) / 100;
+  return Math.abs(rounded) < 0.01 ? 0 : rounded;
 }
 
 // -------------------- CONVENIENCE COMBINATIONS --------------------

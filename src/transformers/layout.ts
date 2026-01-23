@@ -22,6 +22,15 @@ export interface SimplifiedLayout {
     height?: number;
     aspectRatio?: number;
   };
+  /**
+   * Always-present computed size from absoluteBoundingBox.
+   * Unlike `dimensions`, this is always populated regardless of layout mode,
+   * giving the actual rendered pixel dimensions for pixel-perfect code generation.
+   */
+  computedSize?: {
+    width: number;
+    height: number;
+  };
   padding?: string;
   sizing?: {
     horizontal?: "fixed" | "fill" | "hug";
@@ -206,15 +215,22 @@ function buildSimplifiedLayoutValues(
     vertical: convertSizing(n.layoutSizingVertical),
   };
 
-  // Only include positioning-related properties if parent layout isn't flex or if the node is absolute
-  if (
-    // If parent is a frame but not an AutoLayout, or if the node is absolute, include positioning-related properties
-    isFrame(parent) &&
-    !isInAutoLayoutFlow(n, parent)
-  ) {
-    if (n.layoutPositioning === "ABSOLUTE") {
-      layoutValues.position = "absolute";
-    }
+  // Always include computedSize for pixel-perfect code generation
+  // This gives the actual rendered dimensions regardless of layout mode
+  if (isRectangle("absoluteBoundingBox", n)) {
+    layoutValues.computedSize = {
+      width: pixelRound(n.absoluteBoundingBox.width),
+      height: pixelRound(n.absoluteBoundingBox.height),
+    };
+  }
+
+  // Include absolute positioning info when node is not in auto-layout flow
+  // This helps Claude understand exact positioning for pixel-perfect generation
+  if (isFrame(parent) && !isInAutoLayoutFlow(n, parent)) {
+    // Mark as absolute positioned - either explicitly set or inferred from parent having no auto-layout
+    layoutValues.position = "absolute";
+
+    // Always include position coordinates for absolutely positioned elements
     if (n.absoluteBoundingBox && parent.absoluteBoundingBox) {
       layoutValues.locationRelativeToParent = {
         x: pixelRound(n.absoluteBoundingBox.x - parent.absoluteBoundingBox.x),

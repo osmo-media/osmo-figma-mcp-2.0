@@ -6,6 +6,11 @@ export type SimplifiedTextStyle = Partial<{
   fontWeight: number;
   fontSize: number;
   lineHeight: string;
+  /**
+   * Raw line height in pixels for pixel-perfect code generation.
+   * Included alongside the em-based lineHeight value.
+   */
+  lineHeightPx: number;
   letterSpacing: string;
   textCase: string;
   textAlignHorizontal: string;
@@ -41,6 +46,11 @@ export function extractTextStyle(n: FigmaDocumentNode) {
       lineHeight:
         "lineHeightPx" in style && style.lineHeightPx && style.fontSize
           ? `${style.lineHeightPx / style.fontSize}em`
+          : undefined,
+      // Include raw pixel value for pixel-perfect code generation
+      lineHeightPx:
+        "lineHeightPx" in style && typeof style.lineHeightPx === "number"
+          ? style.lineHeightPx
           : undefined,
       letterSpacing:
         style.letterSpacing && style.letterSpacing !== 0 && style.fontSize

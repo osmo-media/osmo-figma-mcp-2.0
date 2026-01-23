@@ -85,6 +85,21 @@ export interface SimplifiedNode {
   effects?: string;
   opacity?: number;
   borderRadius?: string;
+  /**
+   * Whether this frame clips its content (overflow: hidden in CSS).
+   * Only present when true.
+   */
+  clipsContent?: boolean;
+  /**
+   * Blend mode when not the default PASS_THROUGH.
+   * Maps to CSS mix-blend-mode property.
+   */
+  blendMode?: string;
+  /**
+   * Rotation angle in degrees, extracted from relativeTransform.
+   * Only present when node is rotated.
+   */
+  rotation?: string;
   // layout & alignment
   layout?: string;
   // for rect-specific strokes, etc.
