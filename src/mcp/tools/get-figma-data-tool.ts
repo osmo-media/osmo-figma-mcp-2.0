@@ -146,6 +146,7 @@ async function getFigmaData(params: GetFigmaDataParams) {
       },
       nodes,
       globalVars,
+      rawFigmaApi: rawApiResponse, // Include raw API response for frontend toggle
     };
 
     Logger.log(`Generating ${outputFormat.toUpperCase()} result from extracted data`);
