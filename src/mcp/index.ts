@@ -4,9 +4,11 @@ import {
   downloadFigmaImagesTool,
   getFigmaDataTool,
   getFigmaScreenshotTool,
+  getRawFigmaApiTool,
   type DownloadImagesParams,
   type GetFigmaDataParams,
   type GetFigmaScreenshotParams,
+  type GetRawFigmaApiParams,
 } from "./tools/index.js";
 
 const serverInfo = {
@@ -59,6 +61,15 @@ function registerTools(server: McpServer): void {
     getFigmaScreenshotTool.description,
     getFigmaScreenshotTool.parameters,
     (params: GetFigmaScreenshotParams) => getFigmaScreenshotTool.handler(params),
+  );
+
+  // Register get_raw_figma_api tool
+  // Returns unprocessed Figma API response - use sparingly
+  server.tool(
+    getRawFigmaApiTool.name,
+    getRawFigmaApiTool.description,
+    getRawFigmaApiTool.parameters,
+    (params: GetRawFigmaApiParams) => getRawFigmaApiTool.handler(params),
   );
 }
 

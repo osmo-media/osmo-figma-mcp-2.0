@@ -195,9 +195,50 @@ async function runTest() {
       console.log("⏭️  Test 3: Skipping supplementary tool test (no S3 config)\n");
     }
 
-    // Test 4: Screenshot to S3
+    // Test 4: Raw Figma API (no processing)
+    console.log("📥 Test 4: Testing get_raw_figma_api tool...");
+    const rawResult = await client.request(
+      {
+        method: "tools/call",
+        params: {
+          name: "get_raw_figma_api",
+          arguments: {
+            fileKey: TEST_FILE_KEY,
+            nodeId: TEST_NODE_ID,
+            figmaAccessToken: TEST_FIGMA_TOKEN,
+            depth: 1, // Limit depth to keep response smaller
+          },
+        },
+      },
+      CallToolResultSchema,
+    );
+
+    const rawContent = rawResult.content[0].text as string;
+    const rawParsed = JSON.parse(rawContent);
+
+    // Check for Figma API structure (should have nodes object with node IDs as keys)
+    if (rawParsed.nodes && typeof rawParsed.nodes === "object") {
+      const nodeIds = Object.keys(rawParsed.nodes);
+      console.log(`   ✅ Got raw Figma API response with ${nodeIds.length} node(s)`);
+      for (const nodeId of nodeIds) {
+        const node = rawParsed.nodes[nodeId];
+        if (node.document) {
+          console.log(`      - Node ${nodeId}: type="${node.document.type}", name="${node.document.name}"`);
+        }
+      }
+      console.log();
+    } else if (rawParsed.document) {
+      // Full file response
+      console.log(`   ✅ Got raw Figma API response for file "${rawParsed.name}"`);
+      console.log(`      - Document type: ${rawParsed.document.type}`);
+      console.log();
+    } else {
+      console.log(`   ⚠️  Unexpected response structure\n`);
+    }
+
+    // Test 5: Screenshot to S3
     if (hasS3Config) {
-      console.log("📸 Test 4: Taking screenshot and uploading to S3...");
+      console.log("📸 Test 5: Taking screenshot and uploading to S3...");
 
       const screenshotResult = await client.request(
         {
@@ -228,7 +269,7 @@ async function runTest() {
         console.log(`   ⚠️  Screenshot failed: ${screenshotParsed.error}\n`);
       }
     } else {
-      console.log("⏭️  Test 4: Skipping screenshot test (no S3 config)\n");
+      console.log("⏭️  Test 5: Skipping screenshot test (no S3 config)\n");
     }
 
     console.log("🎉 All tests passed!\n");
