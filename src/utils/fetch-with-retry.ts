@@ -13,12 +13,18 @@ type RequestOptions = RequestInit & {
   headers?: Record<string, string>;
 };
 
+// 60s timeout for Figma API requests (image rendering can be slow for complex nodes)
+const FETCH_TIMEOUT_MS = 60_000;
+
 export async function fetchWithRetry<T extends { status?: number }>(
   url: string,
   options: RequestOptions = {},
 ): Promise<T> {
   try {
-    const response = await fetch(url, options);
+    const response = await fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
 
     if (!response.ok) {
       throw new Error(`Fetch failed with status ${response.status}: ${response.statusText}`);
@@ -35,7 +41,7 @@ export async function fetchWithRetry<T extends { status?: number }>(
     // -S: Show errors in stderr
     // --fail-with-body: curl errors with code 22, and outputs body of failed request, e.g. "Fetch failed with status 404"
     // -L: Follow redirects
-    const curlArgs = ["-s", "-S", "--fail-with-body", "-L", ...curlHeaders, url];
+    const curlArgs = ["-s", "-S", "--fail-with-body", "-L", "--max-time", "60", ...curlHeaders, url];
 
     try {
       // Fallback to curl for  corporate networks that have proxies that sometimes block fetch

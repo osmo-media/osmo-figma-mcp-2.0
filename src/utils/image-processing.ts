@@ -118,8 +118,10 @@ export async function downloadAndProcessImageToBuffer(
   cropTransform?: Transform,
   requiresImageDimensions: boolean = false,
 ): Promise<BufferProcessingResult> {
-  // Download image to buffer
-  const response = await fetch(imageUrl);
+  // Download image to buffer (60s timeout)
+  const response = await fetch(imageUrl, {
+    signal: AbortSignal.timeout(60_000),
+  });
   if (!response.ok) {
     throw new Error(`Failed to download image: ${response.statusText}`);
   }

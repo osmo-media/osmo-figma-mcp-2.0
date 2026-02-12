@@ -28,6 +28,7 @@ export async function downloadFigmaImage(
     // Use fetch to download the image
     const response = await fetch(imageUrl, {
       method: "GET",
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!response.ok) {

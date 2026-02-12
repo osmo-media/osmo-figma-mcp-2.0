@@ -500,8 +500,10 @@ export class FigmaService {
       throw new Error(`No render URL found for node ${nodeId}. The node may not exist or may not be renderable.`);
     }
 
-    // Download to buffer
-    const response = await fetch(renderUrl);
+    // Download to buffer (60s timeout - Figma CDN can be slow for large renders)
+    const response = await fetch(renderUrl, {
+      signal: AbortSignal.timeout(60_000),
+    });
     if (!response.ok) {
       throw new Error(`Failed to download screenshot: ${response.statusText}`);
     }

@@ -74,6 +74,7 @@ export async function uploadBufferToS3(
         "Content-Type": contentType,
         "Content-Length": buffer.length.toString(),
       },
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!uploadResponse.ok) {
