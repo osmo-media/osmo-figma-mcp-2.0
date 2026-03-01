@@ -2,6 +2,7 @@ import { z } from "zod";
 import { FigmaService, type S3UploadedImage } from "../../services/figma.js";
 import { Logger } from "../../utils/logger.js";
 
+
 const parameters = {
   fileKey: z
     .string()
