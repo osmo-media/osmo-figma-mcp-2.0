@@ -4,11 +4,9 @@ import {
   downloadFigmaImagesTool,
   getFigmaDataTool,
   getFigmaScreenshotTool,
-  getRawFigmaApiTool,
   type DownloadImagesParams,
   type GetFigmaDataParams,
   type GetFigmaScreenshotParams,
-  type GetRawFigmaApiParams,
 } from "./tools/index.js";
 
 const serverInfo = {
@@ -36,8 +34,6 @@ function createServer({ isHTTP = false }: CreateServerOptions = {}) {
 }
 
 function registerTools(server: McpServer): void {
-  // Register get_figma_data tool
-  // Tool handles its own authentication and output format via parameters
   server.tool(
     getFigmaDataTool.name,
     getFigmaDataTool.description,
@@ -45,8 +41,6 @@ function registerTools(server: McpServer): void {
     (params: GetFigmaDataParams) => getFigmaDataTool.handler(params),
   );
 
-  // Register download_figma_images tool
-  // Tool handles its own authentication via figmaAccessToken parameter
   server.tool(
     downloadFigmaImagesTool.name,
     downloadFigmaImagesTool.description,
@@ -54,22 +48,11 @@ function registerTools(server: McpServer): void {
     (params: DownloadImagesParams) => downloadFigmaImagesTool.handler(params),
   );
 
-  // Register get_figma_screenshot tool
-  // Takes a screenshot of a node and uploads to S3
   server.tool(
     getFigmaScreenshotTool.name,
     getFigmaScreenshotTool.description,
     getFigmaScreenshotTool.parameters,
     (params: GetFigmaScreenshotParams) => getFigmaScreenshotTool.handler(params),
-  );
-
-  // Register get_raw_figma_api tool
-  // Returns unprocessed Figma API response - use sparingly
-  server.tool(
-    getRawFigmaApiTool.name,
-    getRawFigmaApiTool.description,
-    getRawFigmaApiTool.parameters,
-    (params: GetRawFigmaApiParams) => getRawFigmaApiTool.handler(params),
   );
 }
 
